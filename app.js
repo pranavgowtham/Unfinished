@@ -60,7 +60,12 @@ function App() {
 
   // Mindful Over-consumption warning (e.g. after goal + 5 extra cards)
   const [showMindfulWarning, setShowMindfulWarning] = useState(false);
+  const [mindfulSnoozeCount, setMindfulSnoozeCount] = useState(0);
   const [knowledgeFilter, setKnowledgeFilter] = useState('all');
+
+  // Contrarian & Skepticism Metrics
+  const [userGuessStats, setUserGuessStats] = useState({ totalGuesses: 0, correctGuesses: 0, proofRequests: 0, pollVotes: 0 });
+  const [copiedFactIdx, setCopiedFactIdx] = useState(null);
 
   const stageRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
@@ -74,11 +79,12 @@ function App() {
     if (completedBeats >= dailyGoal && !hasDismissedVault && !showDailyVault) {
       setShowDailyVault(true);
     }
-    // If user has read 10+ cards (5 beyond daily goal), gently prompt them with mindful friction
-    if (completedBeats >= (dailyGoal + 5) && !showMindfulWarning) {
+    // Mindful friction: show only if not snoozed past current count
+    const threshold = dailyGoal + 5;
+    if (completedBeats >= threshold && completedBeats >= mindfulSnoozeCount && !showMindfulWarning) {
       setShowMindfulWarning(true);
     }
-  }, [completedBeats, dailyGoal, hasDismissedVault, showMindfulWarning]);
+  }, [completedBeats, dailyGoal, hasDismissedVault, showDailyVault, mindfulSnoozeCount, showMindfulWarning]);
 
   const handleAdvance = (isAway = false) => {
     try {
@@ -102,6 +108,25 @@ function App() {
   };
 
   const handleBeatInteraction = (interaction) => {
+    // Track stats for cognitive profile
+    if (interaction.type === 'call') {
+      setUserGuessStats(prev => ({
+        ...prev,
+        totalGuesses: prev.totalGuesses + 1,
+        correctGuesses: prev.correctGuesses + (interaction.isCorrect ? 1 : 0)
+      }));
+    } else if (interaction.type === 'mechanism') {
+      setUserGuessStats(prev => ({
+        ...prev,
+        proofRequests: prev.proofRequests + 1
+      }));
+    } else if (interaction.type === 'poll') {
+      setUserGuessStats(prev => ({
+        ...prev,
+        pollVotes: prev.pollVotes + 1
+      }));
+    }
+
     setState(prevState => {
       let nextState = { ...prevState };
 
@@ -223,6 +248,8 @@ function App() {
     setShowDailyVault(false);
     setHasDismissedVault(false);
     setShowMindfulWarning(false);
+    setMindfulSnoozeCount(0);
+    setUserGuessStats({ totalGuesses: 0, correctGuesses: 0, proofRequests: 0, pollVotes: 0 });
   };
 
   const handleSaveKey = () => {
@@ -235,17 +262,38 @@ function App() {
     setHasDismissedVault(true);
   };
 
+  const handleSnoozeMindfulWarning = (extraCards = 5) => {
+    setShowMindfulWarning(false);
+    setMindfulSnoozeCount(completedBeats + extraCards);
+  };
+
   const candidates = getScoredCandidates(state);
 
-  // Compute Curiosity Archetype for side panel
+  // Compute Inspiring Curiosity Superpower for user
   const getArchetype = () => {
     const { money, systems, science, behaviour } = state.topics;
     const highest = Object.entries({ money, systems, science, behaviour }).sort((a,b) => b[1] - a[1])[0][0];
     
-    if (highest === 'systems') return { name: "System Mechanic", desc: "You gravitate towards the hidden engineering, logistics, and constraints behind daily reality." };
-    if (highest === 'money') return { name: "Arbitrage Sleuth", desc: "You focus on pricing psychology, invisible subsidies, and how economic incentives shape behavior." };
-    if (highest === 'science') return { name: "Empirical Realist", desc: "You value sensory biology, physiological physics, and facts that disprove common assumptions." };
-    return { name: "Behavioral Diagnostician", desc: "You seek psychological self-honesty, social traps, and understanding irrational human quirks." };
+    if (highest === 'systems') return { 
+      name: "Hidden Systems Detective", 
+      icon: "⚙️", 
+      desc: "You look past surface appearances to understand the invisible infrastructure and engineering that make modern life work." 
+    };
+    if (highest === 'money') return { 
+      name: "The Economics Sleuth", 
+      icon: "🕵️‍♂️", 
+      desc: "You can spot pricing psychology, hidden subsidies, and consumer traps from a mile away." 
+    };
+    if (highest === 'science') return { 
+      name: "Sensory Myth-Buster", 
+      icon: "🔬", 
+      desc: "You demand real evidence and love discovering biological and physical quirks that defy common intuition." 
+    };
+    return { 
+      name: "Behavior & Mind Hacker", 
+      icon: "🧠", 
+      desc: "You have an eye for cognitive biases, irrational social habits, and why humans do what they do." 
+    };
   };
 
   const archetype = getArchetype();
@@ -371,9 +419,9 @@ function App() {
               <button
                 className="control-btn"
                 style=${{ flex: 1, padding: '6px 10px', fontSize: '11px' }}
-                onClick=${() => setShowMindfulWarning(false)}
+                onClick=${() => handleSnoozeMindfulWarning(5)}
               >
-                Keep Reading
+                Keep Reading (+5 cards)
               </button>
             </div>
           </div>
@@ -502,14 +550,14 @@ function App() {
             className=${`panel-tab-btn ${activePanelTab === 'insights' ? 'active' : ''}`}
             onClick=${() => setActivePanelTab('insights')}
           >
-            <span>💡 Insights Unlocked</span>
+            <span>💡 Unlocked Truths</span>
             <span style=${{ fontSize: '10px', opacity: 0.7 }}>(${state.signals.length})</span>
           </button>
           <button
             className=${`panel-tab-btn ${activePanelTab === 'algorithm' ? 'active' : ''}`}
             onClick=${() => setActivePanelTab('algorithm')}
           >
-            <span>⚙️ Curiosity Profile</span>
+            <span>⚡ Superpower & Impact</span>
           </button>
           <button
             className="panel-tab-btn"
@@ -553,58 +601,151 @@ function App() {
               `)}
             </div>
 
-            <!-- Collectible Mental Model Deck -->
+            <!-- Collectible Mental Model Deck (Party-Trick Truths) -->
             <div className="vault-cards-grid">
               ${state.signals.length === 0 ? html`
                 <div className="empty-vault-state">
-                  <div className="empty-vault-icon">🎴</div>
-                  <div className="empty-vault-title">No mental models unlocked yet</div>
+                  <div className="empty-vault-icon">💡</div>
+                  <div className="empty-vault-title">No truths collected today</div>
                   <div className="empty-vault-desc">
-                    Test your intuition on multiple-choice clues, inspect proof mechanisms, or vote in polls to capture permanent models into your deck.
+                    Answer multiple-choice clues, inspect proof citations, or vote in polls to unlock punchy, shareable takeaways into your vault.
                   </div>
                 </div>
               ` : state.signals
                 .filter(sig => {
                   if (knowledgeFilter === 'all') return true;
+                  const topic = sig.topic || '';
+                  if (knowledgeFilter === topic) return true;
                   const text = (sig.headline + ' ' + sig.detail).toLowerCase();
-                  if (knowledgeFilter === 'money') return text.includes('arbitrage') || text.includes('price') || text.includes('concession') || text.includes('money') || text.includes('subsidy');
-                  if (knowledgeFilter === 'science') return text.includes('sensory') || text.includes('biology') || text.includes('proof') || text.includes('physics') || text.includes('flight') || text.includes('science');
-                  if (knowledgeFilter === 'systems') return text.includes('engine') || text.includes('lithium') || text.includes('battery') || text.includes('nitrogen') || text.includes('packaging') || text.includes('systems');
-                  if (knowledgeFilter === 'behaviour') return text.includes('psych') || text.includes('bias') || text.includes('curiosity') || text.includes('behaviour') || text.includes('fall');
+                  if (knowledgeFilter === 'money') return text.includes('arbitrage') || text.includes('price') || text.includes('popcorn') || text.includes('concession') || text.includes('money') || text.includes('subsidy');
+                  if (knowledgeFilter === 'science') return text.includes('sensory') || text.includes('biology') || text.includes('taste') || text.includes('food') || text.includes('altitude') || text.includes('proof') || text.includes('physics') || text.includes('science');
+                  if (knowledgeFilter === 'systems') return text.includes('engine') || text.includes('chip') || text.includes('nitrogen') || text.includes('lithium') || text.includes('battery') || text.includes('packaging') || text.includes('systems');
+                  if (knowledgeFilter === 'behaviour') return text.includes('psych') || text.includes('mirror') || text.includes('retail') || text.includes('bias') || text.includes('curiosity') || text.includes('behaviour') || text.includes('fall');
                   return true;
                 })
                 .map((sig, i) => html`
-                  <div key=${i} className="artifact-deck-item animate-pop">
-                    <div className="artifact-item-top">
-                      <span className="artifact-type-tag">
-                        ${sig.isBail ? '⚡ Pivot Signal' : '💎 Mental Model'}
-                      </span>
-                      <span className="artifact-status-check">✓ Mastered</span>
+                  <div key=${i} className="truth-trophy-card animate-pop">
+                    <div className="truth-card-header">
+                      <div className="truth-topic-badge">
+                        <span>${sig.icon || '💡'}</span>
+                        <span style=${{ textTransform: 'capitalize' }}>${TOPIC_LABELS[sig.topic] || 'Mental Model'}</span>
+                      </div>
+                      ${sig.stat ? html`
+                        <span className="truth-stat-pill">${sig.stat}</span>
+                      ` : html`<span className="truth-stat-pill">✓ Uncovered</span>`}
                     </div>
-                    <div className="artifact-item-headline">${sig.headline}</div>
-                    <div className="artifact-item-detail">${sig.detail}</div>
+
+                    <div className="truth-card-headline">${sig.headline}</div>
+                    <div className="truth-card-takeaway">${sig.detail}</div>
+
+                    <div className="truth-card-footer">
+                      <button
+                        className="copy-truth-btn"
+                        onClick=${() => {
+                          const textToCopy = `💡 Did you know? ${sig.headline}: ${sig.detail}`;
+                          navigator.clipboard?.writeText(textToCopy);
+                          setCopiedFactIdx(i);
+                          setTimeout(() => setCopiedFactIdx(null), 1800);
+                        }}
+                      >
+                        <span>${copiedFactIdx === i ? '✓ Copied to Clipboard!' : '📋 Copy Party-Trick Truth'}</span>
+                      </button>
+                    </div>
                   </div>
                 `)}
             </div>
           </div>
         ` : html`
-          <!-- ALGORITHM & COGNITIVE MODEL VIEW (Technical evaluation) -->
-          <div>
-            <div className="panel-card">
+          <!-- USER-CENTRIC MIND WORKOUT & CURIOSITY SUPERPOWER -->
+          <div className="cognitive-dna-container">
+            <!-- 1. Curiosity Superpower Passport -->
+            <div className="archetype-passport-card">
+              <div className="passport-badge-row">
+                <span className="passport-tag">Curiosity Superpower</span>
+                <span className="passport-rank">Lvl ${Math.min(9, Math.floor(completedBeats / 2) + 1)} Explorer</span>
+              </div>
+              <div className="passport-title">${archetype.icon} ${archetype.name}</div>
+              <div className="passport-desc">${archetype.desc}</div>
+
+              <!-- Unlocked Trait Badges -->
+              <div className="trait-badges-row">
+                ${userGuessStats.correctGuesses > 0 ? html`
+                  <span className="trait-badge" title="Saw through the counter-intuitive trap">🎯 Myth Buster</span>
+                ` : null}
+                ${userGuessStats.proofRequests > 0 ? html`
+                  <span className="trait-badge" title="Looked up the real-world citation">🔬 Proof Hunter</span>
+                ` : null}
+                ${state.signals.length >= 3 ? html`
+                  <span className="trait-badge" title="Saved multiple party-trick truths">💡 Idea Collector</span>
+                ` : null}
+                ${completedBeats >= dailyGoal ? html`
+                  <span className="trait-badge" title="Completed daily dose without doomscrolling">🧘 Mindful Thinker</span>
+                ` : null}
+                <span className="trait-badge">
+                  ${state.topics.systems > 0.4 ? '⚙️ Mechanical Eye' : (state.topics.money > 0.4 ? '💰 Scam Radar' : '🔬 Sensory Thinker')}
+                </span>
+              </div>
+            </div>
+
+            <!-- 2. Today's Brain Workout (Simple, Rewarding Metrics) -->
+            <div className="panel-card metrics-card">
               <div className="panel-title">
-                <span>Cognitive Balance</span>
-                <span className="brain-tag">Bayesian Weights</span>
+                <span>Today's Brain Workout</span>
+                <span className="brain-tag">Daily Impact</span>
               </div>
 
-              <div className="weights-section">
+              <div className="dna-metric-grid">
+                <div className="dna-metric-box">
+                  <div className="dna-metric-val">
+                    ${state.signals.length}
+                  </div>
+                  <div className="dna-metric-label">Truths Collected</div>
+                  <div className="dna-metric-sub">
+                    Ready to share with friends
+                  </div>
+                </div>
+
+                <div className="dna-metric-box">
+                  <div className="dna-metric-val">
+                    ${completedBeats >= dailyGoal ? 'Goal Met 🎉' : `${completedBeats}/${dailyGoal}`}
+                  </div>
+                  <div className="dna-metric-label">Mindful Progress</div>
+                  <div className="dna-metric-sub">
+                    ${completedBeats >= dailyGoal ? 'Healthy curiosity habit kept' : `${dailyGoal - completedBeats} cards to hit daily finish line`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="depth-meter-container">
+                <div className="depth-meter-header">
+                  <span>How You Like Your Insights</span>
+                  <span style=${{ color: 'var(--accent-mech)', fontWeight: 700 }}>
+                    ${state.depth > 0.6 ? "🔬 Deep Science & Proofs" : "💡 Fast, High-Level Truths"}
+                  </span>
+                </div>
+                <div className="bar-track">
+                  <div className="bar-fill depth" style=${{ width: `${Math.round(state.depth * 100)}%` }} />
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. What Sparks Your Brain (Top Interests) -->
+            <div className="panel-card radar-balance-card">
+              <div className="panel-title">
+                <span>What Sparks Your Brain</span>
+                <span className="brain-tag">Curiosity Mix</span>
+              </div>
+
+              <div className="radar-topic-grid">
                 ${Object.entries(state.topics).map(([topic, weight]) => {
                   const label = TOPIC_LABELS[topic];
                   const pct = Math.round(weight * 100);
+                  const icon = topic === 'money' ? '💰' : (topic === 'systems' ? '⚙️' : (topic === 'science' ? '🔬' : '🧠'));
                   return html`
-                    <div key=${topic} className="weight-row">
-                      <div className="weight-labels">
-                        <span className="weight-label-name">${label}</span>
-                        <span className="weight-label-val">${pct}%</span>
+                    <div key=${topic} className="radar-topic-item">
+                      <div className="radar-topic-header">
+                        <span className="radar-topic-name">${icon} ${label}</span>
+                        <span className="radar-topic-pct">${pct}% interest</span>
                       </div>
                       <div className="bar-track">
                         <div className=${`bar-fill ${topic}`} style=${{ width: `${pct}%` }} />
@@ -612,38 +753,26 @@ function App() {
                     </div>
                   `;
                 })}
-
-                <div style=${{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '8px 0' }} />
-
-                <div className="weight-row">
-                  <div className="weight-labels">
-                    <span className="weight-label-name">
-                      Depth Preference: ${state.depth > 0.6 ? "wants mechanism" : "quick takeaways"}
-                    </span>
-                    <span className="weight-label-val">${Math.round(state.depth * 100)}%</span>
-                  </div>
-                  <div className="bar-track">
-                    <div className="bar-fill depth" style=${{ width: `${Math.round(state.depth * 100)}%` }} />
-                  </div>
-                </div>
               </div>
             </div>
 
-            <div className="panel-card">
+            <!-- 4. Up Next In Your Feed -->
+            <div className="panel-card next-queue-card">
               <div className="panel-title">
-                <span>Next Up in Algorithm Queue</span>
+                <span>Up Next For You</span>
+                <span style=${{ fontSize: '10px', color: 'var(--ink-secondary)' }}>Curated for your curiosity</span>
               </div>
-              <div>
+              <div className="candidate-queue-list">
                 ${candidates.slice(0, 3).map((c, i) => html`
                   <div key=${c.thread.id} className=${`candidate-item ${i === 0 ? 'top-ranked' : ''}`}>
                     <div className="candidate-name">
-                      <span>${c.thread.name}</span>
-                      <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--ink-secondary)' }}>
-                        ${c.score.toFixed(2)}
+                      <span>${i === 0 ? '👉 ' : ''}${c.thread.name}</span>
+                      <span className="candidate-score-pill">
+                        ${TOPIC_LABELS[c.thread.topic]}
                       </span>
                     </div>
                     <div className="candidate-reason">
-                      ${c.reason} · ${c.beatsRemaining} beats left
+                      ${c.thread.beats[0]?.subline || c.thread.beats[0]?.loop || 'Quick 2-minute bite'}
                     </div>
                   </div>
                 `)}
@@ -674,9 +803,9 @@ function App() {
         <button
           className="companion-toggle-btn"
           onClick=${() => setIsSidePanelOpen(true)}
-          title="Open Knowledge Insights & Brain Archetype"
+          title="Open Unlocked Truths & Curiosity Superpower"
         >
-          <span>💡 Insights Unlocked (${state.signals.length})</span>
+          <span>💡 Unlocked Truths (${state.signals.length})</span>
         </button>
       ` : null}
 

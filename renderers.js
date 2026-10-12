@@ -351,14 +351,22 @@ export function TextBeatRenderer({ unit, onInteract, onAdvance }) {
     if (selectedLabel) return;
     setSelectedLabel(r.label);
     
+    // Extract dynamic core truth & stat from unit content
+    const statStr = unit.deepDive?.stat || unit.subline || (unit.loop ? `Truth: ${unit.loop}` : "Key Insight");
+    const cleanBody = unit.body ? unit.body.replace(/\*\*|\#\#|\@\@/g, '').split('\n')[0] : '';
+    const punchline = unit.deepDive?.text || cleanBody || `Explored ${unit.loop || 'concept'}.`;
+
     onInteract({
       type: 'action',
       label: r.label,
       delta: 0.14,
-      note: `Selected '${r.label}'`,
+      note: `Explored '${unit.loop || r.label}'`,
       signal: {
-        headline: `Uncovered: "${unit.loop || 'Curiosity point'}"`,
-        detail: `Explored '${r.label}' — tuned preference for ${unit.threadTopic || unit.topic}.`
+        headline: unit.loop || unit.threadTitle || "Everyday Truth",
+        detail: punchline,
+        stat: statStr,
+        topic: unit.threadTopic || unit.topic || 'science',
+        icon: unit.visualCue?.icon || (unit.topic === 'money' ? '💰' : (unit.topic === 'systems' ? '⚙️' : (unit.topic === 'science' ? '🔬' : '🧠')))
       }
     });
 
@@ -409,15 +417,21 @@ export function FlinchBeatRenderer({ unit, onInteract, onAdvance }) {
     if (flinched) return;
     setFlinched(r.label);
     
+    const cleanBody = unit.body ? unit.body.replace(/\*\*|\#\#|\@\@/g, '').split('\n')[0] : '';
+    const punchline = unit.subline || cleanBody || `Overcame psychological bias: ${unit.loop || 'Reflection'}`;
+
     onInteract({
       type: 'flinch',
       isFlinch: !!r.isFlinch,
       label: r.label,
       delta: 0.14,
-      note: "Reflected on retail mirror perception",
+      note: `Broke bias: '${unit.loop || r.label}'`,
       signal: {
-        headline: "Recognized retail cognitive bias",
-        detail: `Acknowledged: '${unit.loop}'. Stored in personal reflection model.`
+        headline: unit.loop || "Perception Trap Disarmed",
+        detail: punchline,
+        stat: "Psychological Insight",
+        topic: unit.threadTopic || unit.topic || 'behaviour',
+        icon: "🪞"
       }
     });
 
@@ -466,15 +480,26 @@ export function CallBeatRenderer({ unit, onInteract, onAdvance }) {
 
     const pick = unit.options[idx];
     const isCorrect = pick.isCorrect;
-    const signal = isCorrect ? unit.signalRight : unit.signalWrong;
+    const rawSignal = isCorrect ? unit.signalRight : unit.signalWrong;
+    const truthText = isCorrect ? (unit.revealRight || pick.label) : (unit.revealWrong || unit.question);
+    const correctOpt = unit.options.find(o => o.isCorrect);
+
+    const enrichedSignal = {
+      headline: unit.loop || unit.question || "Counter-Intuitive Reality",
+      detail: rawSignal?.detail || truthText,
+      stat: isCorrect ? `Busted myth: ${pick.label}` : `Truth: ${correctOpt ? correctOpt.label : 'Counter-intuitive fact'}`,
+      isCorrect,
+      topic: unit.threadTopic || unit.topic || 'science',
+      icon: isCorrect ? "🎯" : "💡"
+    };
 
     onInteract({
       type: 'call',
       isCorrect,
       pickedLabel: pick.label,
       delta: 0.16,
-      note: isCorrect ? "You guessed correctly!" : "You fell for a common misconception",
-      signal: signal
+      note: isCorrect ? "You saw through the illusion!" : "You uncovered an unexpected reality",
+      signal: enrichedSignal
     });
   };
 
@@ -560,15 +585,22 @@ export function MechanismBeatRenderer({ unit, onInteract, onAdvance }) {
   const handleReveal = () => {
     if (revealed) return;
     setRevealed(true);
+
+    const cleanBody = unit.body ? unit.body.replace(/\*\*|\#\#|\@\@/g, '').split('\n')[0] : '';
+    const punchline = unit.evidence || cleanBody || `Examined citation for: ${unit.loop}`;
+
     onInteract({
       type: 'mechanism',
       delta: 0.10,
       depthDelta: 0.12,
       evidenceDelta: 0.22,
       note: "You requested deeper mechanism proof",
-      signal: unit.signal || {
-        headline: "Demanded underlying proof",
-        detail: `Examined evidence for: "${unit.loop}".`
+      signal: {
+        headline: unit.loop || "Verified Mechanism",
+        detail: punchline,
+        stat: unit.citation ? `Proof: ${unit.citation}` : "Verified Citation",
+        topic: unit.threadTopic || unit.topic || 'systems',
+        icon: "🔬"
       }
     });
   };
@@ -621,14 +653,18 @@ export function PollBeatRenderer({ unit, onInteract, onAdvance }) {
   const handlePick = (idx) => {
     if (isLocked) return;
     setSelectedIdx(idx);
+    const pick = unit.options[idx];
     onInteract({
       type: 'poll',
       pickedIdx: idx,
       delta: 0.10,
-      note: "Contributed to consensus poll",
+      note: "Voted on community poll",
       signal: {
-        headline: "Voted in community poll",
-        detail: `Selected '${unit.options[idx].label}'. Distributed weight to ${unit.topic}.`
+        headline: unit.question || "Community Instinct",
+        detail: `You voted: "${pick.label}". Consensus vote: ${pick.percentage}% of thinkers agree.`,
+        stat: `${pick.percentage}% voted this way`,
+        topic: unit.topic || 'behaviour',
+        icon: "🗳️"
       }
     });
   };
